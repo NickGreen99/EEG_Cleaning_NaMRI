@@ -17,12 +17,14 @@ def epoch_data(eeg_segment, window_size_time):
                       np.ones(len(steady_samples))]).astype(int).T
   
   # Create an epochs object with our events
-  epochs = mne.Epochs(eeg_segment, events, tmin=0, tmax=window_size_time,
+  epochs = mne.Epochs(eeg_segment, events, tmin=0, tmax=window_size_time-(1/s_freq),
                       baseline=(0, 0), reject=None, flat=None,
                       reject_by_annotation=False, verbose=False)
   return epochs.get_data()
 
 def eeg_read(vhdr_file):
+    
+    window_size_time = 0.125
 
     chs = [
     'Fp1','Fp2','F3','F4','C3','C4','P3','P4','O1','O2',
@@ -52,7 +54,7 @@ def eeg_read(vhdr_file):
     print('#### Writing Clean Segments ... ####')
     for clean_time_slot in subject_segments[subject_id]['clean']:
         seg = raw.copy().crop(tmin=clean_time_slot[0], tmax=clean_time_slot[1])
-        data = epoch_data(seg, 0.1)
+        data = epoch_data(seg, window_size_time)
         clean_segments.append(data)
         del seg, data
         gc.collect()
@@ -71,12 +73,12 @@ def eeg_read(vhdr_file):
     print('#### Writing Dirty Segments ... ####')
     for dirty_time_slot in subject_segments[subject_id]['dirty']:
         dirty_seg = raw.copy().crop(tmin=dirty_time_slot[0], tmax=dirty_time_slot[1])
-        dirty_data = epoch_data(dirty_seg, 0.1)
+        dirty_data = epoch_data(dirty_seg, window_size_time)
         dirty_segments.append(dirty_data)
 
         # Keep only the noise
         noise_proxy_seg = dirty_seg.filter(l_freq=100., h_freq=250., fir_design='firwin', verbose=False)
-        noise_data = epoch_data(noise_proxy_seg, 0.1)
+        noise_data = epoch_data(noise_proxy_seg, window_size_time)
         noise_segments.append(noise_data)
 
         del dirty_seg, noise_proxy_seg, dirty_data, noise_data

@@ -3,33 +3,45 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+# class ResBlock1D(nn.Module):
+#     def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1, bias =True):
+#         super().__init__()
+#         self.conv1 = nn.Conv1d(in_channels = in_channels, 
+#                                out_channels = out_channels, 
+#                                kernel_size = kernel_size, 
+#                                stride = stride, 
+#                                padding = padding, 
+#                                bias=bias)
+#         self.relu = nn.ReLU(inplace=True)
+#         self.conv2 = nn.Conv1d(in_channels = in_channels, 
+#                                out_channels = out_channels, 
+#                                kernel_size = kernel_size, 
+#                                stride = stride, 
+#                                padding = padding, 
+#                                bias = bias)
+
+#     def forward(self, x):
+#         residual = x
+#         out = self.conv1(x)
+#         out = self.relu(out)
+#         out = self.conv2(out)
+#         # Note: no activation here
+#         return out + residual
 class ResBlock1D(nn.Module):
-    def __init__(self, channels, kernel_size=3, stride=1, padding=1):
+    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, bias=True):
         super().__init__()
-        self.conv1 = nn.Conv1d(
-            in_channels=channels,
-            out_channels=channels,
-            stride=1,
-            kernel_size=kernel_size,
-            padding=padding,
-            bias=True
-        )
+        self.pad = (kernel_size - 1) // 2
+        self.conv1 = nn.Conv1d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=0, bias=bias)
         self.relu = nn.ReLU(inplace=True)
-        self.conv2 = nn.Conv1d(
-            in_channels=channels,
-            out_channels=channels,
-            stride=1,
-            kernel_size=kernel_size,
-            padding=padding,
-            bias=True
-        )
+        self.conv2 = nn.Conv1d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=0, bias=bias)
 
     def forward(self, x):
         residual = x
+        x = F.pad(x, (self.pad, self.pad), mode='reflect')
         out = self.conv1(x)
         out = self.relu(out)
+        out = F.pad(out, (self.pad, self.pad), mode='reflect')
         out = self.conv2(out)
-        # Note: no activation here, since UNetRes’s ResBlock does: out = x + res
         return out + residual
 
 
@@ -47,56 +59,56 @@ class DeepDSP_UNetRes(nn.Module):
 
         # ─── HEAD ───
         #(in_channels → 32) with kernel_size=9, padding=4.
-        self.head = nn.Conv1d(in_channels, 32, kernel_size=9, padding=4, bias=True)
+        self.head = nn.Conv1d(in_channels, 32, kernel_size=9, stride = 1, padding=4, bias=True)
 
         # ─── ENCODER STAGE 1 ───
         # 4 × ResBlock1D(32 → 32)
         self.down1_res = nn.Sequential(
-            *[ResBlock1D(32) for _ in range(self.nb)]
+            *[ResBlock1D(32, 32) for _ in range(self.nb)]
         )
         # Then a stride-2 Conv1d(32 → 64). (No BatchNorm; add ReLU in forward.)
         self.down1_conv = nn.Conv1d(32, 64, kernel_size=2, stride=2, bias=True)
 
         # ─── ENCODER STAGE 2 ───
         self.down2_res = nn.Sequential(
-            *[ResBlock1D(64) for _ in range(self.nb)]
+            *[ResBlock1D(64,64) for _ in range(self.nb)]
         )
         self.down2_conv = nn.Conv1d(64, 128, kernel_size=2, stride=2, bias=True)
 
         # ─── ENCODER STAGE 3 ───
         self.down3_res = nn.Sequential(
-            *[ResBlock1D(128) for _ in range(self.nb)]
+            *[ResBlock1D(128, 128) for _ in range(self.nb)]
         )
         self.down3_conv = nn.Conv1d(128, 256, kernel_size=2, stride=2, bias=True)
 
         # ─── BOTTLENECK ───
         # 4 × ResBlock1D(256 → 256)
         self.body = nn.Sequential(
-            *[ResBlock1D(256) for _ in range(self.nb)]
+            *[ResBlock1D(256, 256) for _ in range(self.nb)]
         )
 
         # ─── DECODER STAGE 1 (upsample from 256 → 128) ───
         # ConvTranspose1d(256 → 128, stride=2), then 4 × ResBlock1D(128)
-        self.up3_convtrans = nn.ConvTranspose1d(256, 128, kernel_size=2, stride=2, output_padding=1, bias=True)
+        self.up3_convtrans = nn.ConvTranspose1d(256, 128, kernel_size=2, stride=2, bias=True)
         self.up3_res = nn.Sequential(
-            *[ResBlock1D(128) for _ in range(self.nb)]
+            *[ResBlock1D(128, 128) for _ in range(self.nb)]
         )
 
         # ─── DECODER STAGE 2 (upsample from 128 → 64) ───
         self.up2_convtrans = nn.ConvTranspose1d(128, 64, kernel_size=2, stride=2, bias=True)
         self.up2_res = nn.Sequential(
-            *[ResBlock1D(64) for _ in range(self.nb)]
+            *[ResBlock1D(64, 64) for _ in range(self.nb)]
         )
 
         # ─── DECODER STAGE 3 (upsample from 64 → 32) ───
         self.up1_convtrans = nn.ConvTranspose1d(64, 32, kernel_size=2, stride=2, bias=True)
         self.up1_res = nn.Sequential(
-            *[ResBlock1D(32) for _ in range(self.nb)]
+            *[ResBlock1D(32, 32) for _ in range(self.nb)]
         )
 
         # ─── TAIL ───
         # Conv1d(32 → out_channels) with kernel_size=9, padding=4
-        self.tail = nn.Conv1d(32, out_channels, kernel_size=9, padding=4, bias=True)
+        self.tail = nn.Conv1d(32, out_channels, kernel_size=9, stride=1, padding=4, bias=True)
 
 
     def forward(self, x):

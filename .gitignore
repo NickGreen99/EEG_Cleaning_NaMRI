@@ -1,0 +1,16 @@
+# Ignore all data files
+data_raw/
+data_segmented/
+
+# Ignore tensorboard info
+runs/
+
+#Ignore best model (FOR NOW)
+best_model.pt
+
+# Ignore the 'venv' directory and its contents
+.venv/
+
+# Ignore all deep_dsp reference code
+deep_dsp.py
+!bin/*.class

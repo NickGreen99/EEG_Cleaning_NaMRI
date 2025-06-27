@@ -13,4 +13,6 @@ best_model.pt
 
 # Ignore all deep_dsp reference code
 deep_dsp.py
-!bin/*.class
+
+#Ignore _pycache
+__pycache__/

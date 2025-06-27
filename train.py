@@ -7,6 +7,8 @@ from torch.utils.data import DataLoader, Dataset, random_split
 from torch.utils.tensorboard import SummaryWriter
 import matplotlib.pyplot as plt
 
+from resunet import DeepDSP_UNetRes
+
 # ───────────────────────────────────────────────
 #                Dataset definition
 # ───────────────────────────────────────────────
